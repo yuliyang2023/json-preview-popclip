@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>JSON 美化预览</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f6f8;--panel:#fff;--fg:#202938;--muted:#677489;--border:#e0e5ed;--key:#6743b5;--str:#19704f;--num:#a94d18;--literal:#285eb1}
+@media(prefers-color-scheme:dark){:root{--bg:#15181f;--panel:#1c202a;--fg:#e0e6f0;--muted:#8d9ab0;--border:#303848;--key:#c5a4ff;--str:#8adbb0;--num:#f6ba86;--literal:#91b9ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px -apple-system,BlinkMacSystemFont,sans-serif}
+header{position:sticky;top:0;z-index:1;background:var(--panel);border-bottom:1px solid var(--border);padding:18px 28px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0}#status{color:var(--muted);flex:1}select{font:inherit;padding:5px 10px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--fg)}
+main{margin:24px;overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 0}
+pre{margin:0;font:13px/1.8 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;tab-size:2;counter-reset:line;min-width:max-content}
+.line{display:block;padding-right:24px;min-height:1.8em}.line:before{counter-increment:line;content:counter(line);display:inline-block;width:64px;padding-right:20px;text-align:right;color:var(--muted);user-select:none}
+.key{color:var(--key)}.string{color:var(--str)}.number{color:var(--num)}.literal{color:var(--literal)}
+#error{display:none;margin:24px;padding:18px;border:1px solid #c96b67;border-radius:10px;white-space:pre-wrap;color:var(--fg)}
+footer{padding:0 28px 24px;color:var(--muted);font-size:12px}
+</style>
+<header><h1>JSON 预览</h1><span id="status"></span><label>缩进 <select id="indent"><option value="2">2 空格</option><option value="4">4 空格</option></select></label></header>
+<div id="error" role="alert"></div>
+<main><pre id="code" aria-label="格式化的 JSON"></pre></main>
+<footer>本地预览 · 不写入剪贴板 · 保留数字精度和键的顺序</footer>
+<script>
+'use strict';
+const source = new TextDecoder().decode(Uint8Array.from(atob('__JSON_BASE64__'), c => c.charCodeAt(0))).trim();
+// Validate only. Format the original tokens rather than stringify parsed numbers.
+function tokenize(text) {
+  JSON.parse(text);
+  return text.match(/"(?:\\[\s\S]|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null|[{}\[\],:]/g) || [];
+}
+function formatTokens(tokens, spaces) {
+  const lines = []; let line = '', depth = 0;
+  const pad = () => ' '.repeat(depth * spaces);
+  const flush = () => { lines.push(line); line = pad(); };
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === '{' || token === '[') {
+      line += token;
+      if (tokens[i + 1] === (token === '{' ? '}' : ']')) { line += tokens[++i]; }
+      else { depth++; flush(); }
+    } else if (token === '}' || token === ']') {
+      lines.push(line); depth--; line = pad() + token;
+    } else if (token === ',') { line += ','; flush(); }
+    else if (token === ':') { line += ': '; }
+    else { line += token; }
+  }
+  lines.push(line); return lines;
+}
+function render(tokens) {
+  const lines = formatTokens(tokens, Number(document.getElementById('indent').value));
+  const fragment = document.createDocumentFragment();
+  for (const text of lines) {
+    const row = document.createElement('span'); row.className = 'line';
+    const re = /"(?:\\[\s\S]|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g;
+    let end = 0, match;
+    while ((match = re.exec(text))) {
+      row.append(document.createTextNode(text.slice(end, match.index)));
+      const span = document.createElement('span'); span.textContent = match[0];
+      span.className = match[0][0] === '"' ? (/^\s*:/.test(text.slice(re.lastIndex)) ? 'key' : 'string') : (/^(true|false|null)$/.test(match[0]) ? 'literal' : 'number');
+      row.append(span); end = re.lastIndex;
+    }
+    row.append(document.createTextNode(text.slice(end))); fragment.append(row);
+  }
+  document.getElementById('code').replaceChildren(fragment);
+  document.getElementById('status').textContent = `${lines.length.toLocaleString()} 行 · ${new TextEncoder().encode(source).length.toLocaleString()} 字节`;
+}
+try {
+  const tokens = tokenize(source); render(tokens);
+  document.getElementById('indent').addEventListener('change', () => render(tokens));
+} catch (error) {
+  document.querySelector('main').hidden = true;
+  document.getElementById('indent').disabled = true;
+  document.getElementById('status').textContent = 'JSON 格式有误';
+  const box = document.getElementById('error'); box.style.display = 'block';
+  box.textContent = `无法解析选中的 JSON\n\n${error.message}\n\n请检查双引号、逗号和括号是否完整。`;
+}
+</script>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "JSON 预览",
+  "identifier": "local.yuliyang.json-preview",
+  "description": "在本地浏览器中美化预览选中的 JSON，不复制或替换内容。",
+  "icon": "square filled {}",
+  "shellScriptRationale": "使用 macOS 自带工具生成本地 HTML 并打开完整预览，避免 PopClip 的短文本预览限制。",
+  "actions": [{
+    "title": "JSON 美化预览",
+    "regex": "\\A\\s*(?:[\\[{\"\\-0-9]|true\\b|false\\b|null\\b)[\\s\\S]*\\z",
+    "interpreter": "/bin/sh",
+    "shellScriptFile": "preview.sh"
+  }]
+}
